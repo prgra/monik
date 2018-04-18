@@ -5,6 +5,6 @@
 *.test
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
-./monik
+monik
 *.swp
 config.toml

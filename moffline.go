@@ -1,9 +1,11 @@
 package main
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 )
 
-func offline(g *gin.Context) {
-	g.String(200, "ok")
+func offline(c *gin.Context) {
+	c.HTML(http.StatusOK, "main/offline", nil)
 }
