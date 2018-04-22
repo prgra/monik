@@ -1,10 +1,11 @@
 package main
 
 import (
-	"database/sql"
 	"html/template"
+	"log"
+	"monik/abills"
 
-	mgo "gopkg.in/mgo.v2"
+	"github.com/davecgh/go-spew/spew"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
@@ -12,11 +13,7 @@ import (
 	"github.com/stvp/go-toml-config"
 )
 
-var (
-	mysqlDB *sql.DB
-	mongo   *mgo.Session
-	myurl   = config.String("abills.url", "")
-)
+var myurl = config.String("abills.url", "")
 
 func main() {
 
@@ -24,6 +21,15 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	log.Print(*myurl)
+	err = abills.New(*myurl)
+	if err != nil {
+		panic(err)
+	}
+	nases, err := abills.GetNases()
+	if err != nil {
+	}
+	spew.Dump(nases)
 
 	r := gin.Default()
 	render := eztemplate.New()
