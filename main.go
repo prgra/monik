@@ -5,8 +5,6 @@ import (
 	"log"
 	"monik/abills"
 
-	"github.com/davecgh/go-spew/spew"
-
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
 	eztemplate "github.com/michelloworld/ez-gin-template"
@@ -26,10 +24,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	nases, err := abills.GetNases()
-	if err != nil {
-	}
-	spew.Dump(nases)
 
 	r := gin.Default()
 	render := eztemplate.New()
