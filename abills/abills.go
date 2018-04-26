@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sort"
 	"sync"
 	"time"
 
@@ -19,7 +20,7 @@ var nases nasdb
 func init() {
 	ping = make(chan Nas, 10000)
 	nases.data = make(map[int]Nas)
-	for i := 0; i < 64; i++ {
+	for i := 0; i < 256; i++ {
 		go worker()
 	}
 	go periodic()
@@ -144,8 +145,8 @@ func (h *Nas) Ping(c int) {
 	if suc > 0 {
 		mi := int64(sum/time.Millisecond) / int64(suc)
 		mid := time.Duration(mi) * time.Millisecond
-		fmt.Println("OK ", h.IP, min, mid, max, suc)
-		h.LossPerc = byte(100 / suc * c)
+		fmt.Println("OK ", h.IP, min, mid, max, suc, 100-100*suc/c)
+		h.LossPerc = byte(100 - 100*suc/c)
 	} else {
 		h.LossPerc = 100
 		// log.Println("loss", h.IP)
@@ -155,11 +156,11 @@ func (h *Nas) Ping(c int) {
 
 func periodic() {
 	for {
-		time.Sleep(20 * time.Second)
 		keys := nases.GetKeys()
 		for _, k := range keys {
 			ping <- nases.Get(k)
 		}
+		time.Sleep(20 * time.Second)
 	}
 }
 func worker() {
@@ -168,7 +169,31 @@ func worker() {
 		if !ok {
 			return
 		}
-		log.Println("ping", n)
-		n.Ping(10)
+		// log.Println("ping", n)
+		n.Ping(5)
 	}
+}
+
+//GetOffline return all offline devices
+func GetOffline() ([]Nas, []Nas) {
+
+	var off, on []Nas
+	nases.mut.RLock()
+	var keys []int
+	for k := range nases.data {
+		keys = append(keys, k)
+	}
+	nases.mut.RUnlock()
+	sort.Ints(keys)
+	nases.mut.RLock()
+	for _, k := range keys {
+		v := nases.data[k]
+		if v.LossPerc > 0 {
+			off = append(off, v)
+		} else {
+			on = append(on, v)
+		}
+	}
+	nases.mut.RUnlock()
+	return off, on
 }

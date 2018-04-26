@@ -4,12 +4,33 @@
   <table class="ui small selectable striped compact table">
     <thead>
       <tr>
+        <th>N</th>
         <th>IP</th>
         <th>Name</th>
+        <th>Address</th>
+        <th>Losses</th>
       </tr>
     </thead>
     <tbody>
+ {{range $i,$p := .on}}
+<tr>
+    <td>{{inc $i}}</td>
+    <td>{{.IP}}</td>
+    <td>{{.MAC}}</td>
+    <td>{{.Street}}</td>
+    <td>{{.LossPerc}}</td>
+</tr>
+ {{end}}
 
+   {{range $i,$p := .offline}}
+  <tr>
+    <td>{{inc $i}}</td>
+    <td>{{.IP}}</td>
+    <td>{{.MAC}}</td>
+    <td>{{.Street}}</td>
+    <td>{{.LossPerc}}</td>
+  </tr>
+  {{end}}
     </tbody>
   </table>
 </div>

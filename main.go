@@ -43,5 +43,5 @@ func main() {
 	r.HTMLRender = render.Init()
 	r.Static("/static", "./static")
 
-	r.Run("127.0.0.1:3001")
+	r.Run(":3001")
 }
