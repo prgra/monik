@@ -25,7 +25,7 @@
    {{range $i,$p := .offline}}
   <tr>
     <td>{{inc $i}}</td>
-    <td>{{.IP}}</td>
+    <td>{{.IP.IP.String}}</td>
     <td>{{.MAC}}</td>
     <td>{{.Street}}</td>
     <td>{{.LossPerc}}</td>

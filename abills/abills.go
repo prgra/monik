@@ -18,10 +18,10 @@ var ping chan Nas
 var nases nasdb
 
 func init() {
-	ping = make(chan Nas, 10000)
+	ping = make(chan Nas, 100)
 	nases.data = make(map[int]Nas)
 	for i := 0; i < 256; i++ {
-		go worker()
+		go worker(i)
 	}
 	go periodic()
 }
@@ -80,6 +80,15 @@ type Nas struct {
 	Description string
 }
 
+type PingStat struct {
+	Cnt  int
+	Recv int
+	Min  time.Duration
+	Max  time.Duration
+	Mid  time.Duration
+	Sum  time.Duration
+}
+
 // GetNases load nases from DB
 func GetNases() error {
 	rows, err := db.Query(`SELECT n.id, n.ip, n.mac, n.nas_type, n.name, d.name, s.name, b.number, n.descr 
@@ -108,53 +117,53 @@ func GetNases() error {
 }
 
 // Ping send to ping chan
-func (h *Nas) Ping(c int) {
+func (h *Nas) Ping(c int) PingStat {
+	var res PingStat
 	p := fastping.NewPinger()
 	p.AddIPAddr(&h.IP)
-	var suc int
-	var min time.Duration
-	var max time.Duration
-	var sum time.Duration
+
 	p.OnRecv = func(addr *net.IPAddr, elapsed time.Duration) {
 		// log.Println("recv")
-		suc++
+		res.Recv++
 
-		if min == 0 {
-			min = elapsed
+		if res.Min == 0 {
+			res.Min = elapsed
 		}
-		if elapsed < min {
-			min = elapsed
+		if elapsed < res.Min {
+			res.Min = elapsed
 		}
-		if elapsed > max {
-			max = elapsed
+		if elapsed > res.Max {
+			res.Max = elapsed
 		}
-		sum += elapsed
+		res.Sum += elapsed
 		// log.Println("elapsed", elapsed)
 	}
 	// p.OnIdle = func() {
 	// 	log.Println("finish")
 	// }
 	// log.Println("run")
-
+	res.Cnt = c
 	for x := 0; x < c; x++ {
 		err := p.Run()
 		if err != nil {
 			fmt.Println(err)
 		}
 	}
-	if suc > 0 {
-		mi := int64(sum/time.Millisecond) / int64(suc)
-		mid := time.Duration(mi) * time.Millisecond
-		fmt.Println("OK ", h.IP, min, mid, max, suc, 100-100*suc/c)
-		h.LossPerc = byte(100 - 100*suc/c)
+	if res.Recv > 0 {
+		mi := int64(res.Sum/time.Millisecond) / int64(res.Recv)
+		res.Mid = time.Duration(mi) * time.Millisecond
+		// fmt.Println("OK ", h.IP, res, suc, 100-100*suc/c)
+		h.LossPerc = byte(100 - 100*res.Recv/c)
 	} else {
 		h.LossPerc = 100
 		// log.Println("loss", h.IP)
 	}
 	nases.Push(*h)
+	return res
 }
 
 func periodic() {
+	time.Sleep(5 * time.Second)
 	for {
 		keys := nases.GetKeys()
 		for _, k := range keys {
@@ -163,14 +172,18 @@ func periodic() {
 		time.Sleep(20 * time.Second)
 	}
 }
-func worker() {
+
+func worker(id int) {
 	for {
 		n, ok := <-ping
 		if !ok {
 			return
 		}
 		// log.Println("ping", n)
-		n.Ping(5)
+		stat := n.Ping(5)
+		if stat.Recv > 0 {
+			log.Println(n.IP, id, stat)
+		}
 	}
 }
 
