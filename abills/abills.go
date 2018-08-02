@@ -4,12 +4,13 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"log"
-	"monik/pinger"
 	"net"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/prgra/monik/pinger"
 
 	//mysql
 	_ "github.com/go-sql-driver/mysql"

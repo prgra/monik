@@ -2,9 +2,10 @@ package main
 
 import (
 	"log"
-	"monik/abills"
 	"net/http"
 	"sort"
+
+	"github.com/prgra/monik/abills"
 
 	"github.com/gin-gonic/gin"
 )

@@ -3,11 +3,11 @@ package main
 import (
 	"html/template"
 	"log"
-	"monik/abills"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
 	eztemplate "github.com/michelloworld/ez-gin-template"
+	"github.com/prgra/monik/abills"
 	"github.com/stvp/go-toml-config"
 )
 
