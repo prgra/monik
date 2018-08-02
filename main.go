@@ -40,6 +40,8 @@ func main() {
 	r.Use(FaviconNew("./static/favicon.ico"))
 
 	r.GET("/", offline)
+	r.GET("/search", search)
+	r.GET("/search/:q", search)
 	r.HTMLRender = render.Init()
 	r.Static("/static", "./static")
 

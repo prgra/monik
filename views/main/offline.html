@@ -1,37 +1,113 @@
 {{define "content"}}
-<div class="ui segment">
 
-  <table class="ui small selectable striped compact table">
-    <thead>
-      <tr>
-        <th>N</th>
-        <th>IP</th>
-        <th>Name</th>
-        <th>Address</th>
-        <th>Losses</th>
-      </tr>
-    </thead>
-    <tbody>
- {{range $i,$p := .on}}
-<tr>
-    <td>{{inc $i}}</td>
-    <td>{{.IP}}</td>
-    <td>{{.MAC}}</td>
-    <td>{{.Street}}</td>
-    <td>{{.LossPerc}}</td>
-</tr>
- {{end}}
 
-   {{range $i,$p := .offline}}
-  <tr>
-    <td>{{inc $i}}</td>
-    <td>{{.IP.IP.String}}</td>
-    <td>{{.MAC}}</td>
-    <td>{{.Street}}</td>
-    <td>{{.LossPerc}}</td>
-  </tr>
-  {{end}}
-    </tbody>
-  </table>
+<div class="ui basic scrolling modal long">
+  <div class="header">
+    История свитча
+  </div>
+  <div id="histc">
+  </div>
 </div>
-{{end}}
+
+<div class="ui segment">
+  <form id="netmoni" method="GET" action="/search/">
+    
+    <div class="ui grid">
+      <div class="nine wide column">
+        
+        <div class="ui left action fluid icon input">
+          <a class="ui primary button" href="/">
+            monik
+          </a>
+          <input name="q" placeholder="Искать тут..." type="text" value="{{.q}}">
+          <i id="searchbutt" class="inverted circular search link icon"></i>
+        </div>
+      </div>
+      <div class="four wide column">
+        <h3 class="ui right aligned header">Offline {{.cnt}}
+        </h3>
+      </div>
+    </div>
+    <form>
+    </div>
+    
+    <div class="ui segment">
+      <h3></h3>
+      <table class="ui small selectable striped compact table">
+        <thead>
+          <tr>
+            <th>N</th>
+            <th>IP</th>
+            <th>Name</th>
+            <th>Address</th>
+            <th>Losses</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- {{range $i,$p := .on}}
+            <tr>
+              <td>{{inc $i}}</td>
+              <td>{{.IP.IP.String}}</td>
+              <td>{{.MAC}}</td>
+              <td>{{.Street}}</td>
+              <td>{{.LossPerc}}</td>
+            </tr>
+            {{end}} -->
+            
+            {{range $i,$p := .offline}}
+            <tr>
+              <td>{{inc $i}}</td>
+              <td>{{.IP.IP.String}}</td>
+              <td>{{.MAC}}</td>
+              <td>{{.Street}} {{.Build}}</td>
+              <td>{{.LossPerc}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+      
+      <script>
+        $('.inline.icon').popup({ on: 'click' });
+        $('.inline.dropdown').dropdown({ action: 'hide' });
+        $('.ui.button.ping').click(function () { ping(this) });
+        $('.ui.hist').click(function () { hist(this) });
+        $('#searchbutt').click(function () { $('#netmoni').submit() });
+        
+        
+        function hist(obj) {
+          var id = $(obj).data('id');
+          $(obj).addClass('loading');
+          $.post("/netmoni/hist", { id: id }).done(function (data) {
+            $('#histc').html(data);
+          });
+          $('.ui.modal')
+          .modal({ onHide: function () { $(obj).removeClass('loading') } }).modal('show');
+        }
+        
+        function ping(obj) {
+          var ip = $(obj).data('ping');
+          var id = $(obj).attr('id');
+          if (!$(obj).hasClass('loading')) {
+            $(obj).addClass('loading');
+            $.post("/netmoni/ping", { ip: ip, id: id }).done(function (data) {
+              $(obj).removeClass('loading red blue yellow green').text(data.text).addClass(data.class);
+            });
+          }
+        }
+        
+        var reloader = function (timer) {
+          setTimeout(function () {
+            if ($('.loading').length > 0) {
+              reloader(20000);
+            }
+            else {
+              location.reload()
+            }
+          }, timer);
+        }
+        
+        reloader(120000);
+      </script>
+      
+      {{end}}

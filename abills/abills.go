@@ -2,28 +2,36 @@ package abills
 
 import (
 	"database/sql"
-	"fmt"
+	"encoding/binary"
 	"log"
+	"monik/pinger"
 	"net"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
 	//mysql
 	_ "github.com/go-sql-driver/mysql"
-	fastping "github.com/tatsushid/go-fastping"
 )
 
 var ping chan Nas
 var nases nasdb
 
 func init() {
-	ping = make(chan Nas, 100)
+	ping = make(chan Nas, 1)
 	nases.data = make(map[int]Nas)
-	for i := 0; i < 256; i++ {
+	for i := 0; i < 9600; i++ {
 		go worker(i)
 	}
 	go periodic()
+	go dper()
+}
+func dper() {
+	for {
+		time.Sleep(10 * time.Second)
+		log.Println("in chan", len(ping))
+	}
 }
 
 var db *sql.DB
@@ -80,6 +88,7 @@ type Nas struct {
 	Description string
 }
 
+// PingStat :: stat of ping struct
 type PingStat struct {
 	Cnt  int
 	Recv int
@@ -89,13 +98,53 @@ type PingStat struct {
 	Sum  time.Duration
 }
 
+func ip2int(ip net.IP) uint32 {
+	if len(ip) == 16 {
+		return binary.BigEndian.Uint32(ip[12:16])
+	}
+	return binary.BigEndian.Uint32(ip)
+}
+
+func int2ip(nn uint32) net.IP {
+	ip := make(net.IP, 4)
+	binary.BigEndian.PutUint32(ip, nn)
+	return ip
+}
+
+// SortedNases :: s
+type SortedNases []Nas
+
+func (s SortedNases) Len() int      { return len(s) }
+func (s SortedNases) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+func (s SortedNases) Less(i, j int) bool {
+	return (s[i].LossPerc > s[j].LossPerc) ||
+		(s[i].LossPerc == s[j].LossPerc && s[i].Street+s[i].Build < s[j].Street+s[j].Build) ||
+		(s[i].LossPerc == s[j].LossPerc && s[i].Street+s[i].Build == s[j].Street+s[j].Build && ip2int(s[i].IP.IP) < ip2int(s[j].IP.IP))
+}
+
+// NasGrep :: search in nases
+func NasGrep(nases []Nas, s string) []Nas {
+	var n []Nas
+	for _, v := range nases {
+		s = strings.ToLower(s)
+		addr := strings.ToLower(v.Street + " " + v.Build)
+		if strings.Index(addr, s) >= 0 ||
+			strings.Index(v.IP.String(), s) >= 0 ||
+			strings.Index(v.MAC.String(), s) >= 0 {
+			n = append(n, v)
+		}
+	}
+	return n
+}
+
 // GetNases load nases from DB
 func GetNases() error {
 	rows, err := db.Query(`SELECT n.id, n.ip, n.mac, n.nas_type, n.name, d.name, s.name, b.number, n.descr 
 		FROM nas n 
 		LEFT JOIN builds b on b.id = n.location_id
 		LEFT JOIN streets s on s.id = b.street_id
-		LEFT JOIN districts d on d.id = s.district_id`)
+		LEFT JOIN districts d on d.id = s.district_id 
+		WHERE n.disable=0`)
 	if err != nil {
 		return err
 	}
@@ -118,36 +167,28 @@ func GetNases() error {
 
 // Ping send to ping chan
 func (h *Nas) Ping(c int) PingStat {
+	// log.Printf("start ping: %v", h)
 	var res PingStat
-	p := fastping.NewPinger()
-	p.AddIPAddr(&h.IP)
-
-	p.OnRecv = func(addr *net.IPAddr, elapsed time.Duration) {
-		// log.Println("recv")
-		res.Recv++
-
-		if res.Min == 0 {
-			res.Min = elapsed
-		}
-		if elapsed < res.Min {
-			res.Min = elapsed
-		}
-		if elapsed > res.Max {
-			res.Max = elapsed
-		}
-		res.Sum += elapsed
-		// log.Println("elapsed", elapsed)
-	}
-	// p.OnIdle = func() {
-	// 	log.Println("finish")
-	// }
-	// log.Println("run")
-	res.Cnt = c
 	for x := 0; x < c; x++ {
-		err := p.Run()
+		stat, err := pinger.Ping(h.IP.String(), time.Second*5)
 		if err != nil {
-			fmt.Println(err)
+			log.Printf("Ping error: %v\n", err)
 		}
+		// log.Printf("stat: %v", stat)
+		res.Cnt++
+
+		if !stat.End.IsZero() {
+			res.Recv++
+			ti := stat.End.Sub(stat.End)
+			res.Mid += ti
+			if ti > res.Max {
+				res.Max = ti
+			}
+			if ti < res.Min || res.Min == 0 {
+				res.Min = ti
+			}
+		}
+
 	}
 	if res.Recv > 0 {
 		mi := int64(res.Sum/time.Millisecond) / int64(res.Recv)
@@ -163,13 +204,16 @@ func (h *Nas) Ping(c int) PingStat {
 }
 
 func periodic() {
-	time.Sleep(5 * time.Second)
+	log.Println("start periodic")
+	time.Sleep(10 * time.Second)
 	for {
+		log.Println("periodic loop start")
 		keys := nases.GetKeys()
+		log.Println("keys", len(keys))
 		for _, k := range keys {
 			ping <- nases.Get(k)
 		}
-		time.Sleep(20 * time.Second)
+		time.Sleep(60 * time.Second)
 	}
 }
 
@@ -180,17 +224,17 @@ func worker(id int) {
 			return
 		}
 		// log.Println("ping", n)
-		stat := n.Ping(5)
+		stat := n.Ping(10)
 		if stat.Recv > 0 {
-			log.Println(n.IP, id, stat)
+			// log.Println(n.IP, id, stat)
 		}
 	}
 }
 
 //GetOffline return all offline devices
-func GetOffline() ([]Nas, []Nas) {
+func GetOffline() []Nas {
 
-	var off, on []Nas
+	var off []Nas
 	nases.mut.RLock()
 	var keys []int
 	for k := range nases.data {
@@ -201,12 +245,29 @@ func GetOffline() ([]Nas, []Nas) {
 	nases.mut.RLock()
 	for _, k := range keys {
 		v := nases.data[k]
-		if v.LossPerc > 0 {
+		if v.LossPerc == 100 {
 			off = append(off, v)
-		} else {
-			on = append(on, v)
 		}
 	}
 	nases.mut.RUnlock()
-	return off, on
+	return off
+}
+
+//GetAllNases return all offline devices
+func GetAllNases() []Nas {
+	var all []Nas
+	nases.mut.RLock()
+	var keys []int
+	for k := range nases.data {
+		keys = append(keys, k)
+	}
+	nases.mut.RUnlock()
+	sort.Ints(keys)
+	nases.mut.RLock()
+	for _, k := range keys {
+		v := nases.data[k]
+		all = append(all, v)
+	}
+	nases.mut.RUnlock()
+	return all
 }
