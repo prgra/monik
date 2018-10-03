@@ -1,19 +1,21 @@
 package main
 
 import (
+	"fmt"
+
+	"github.com/davecgh/go-spew/spew"
 	"github.com/prgra/monik/opinger"
 )
 
 func main() {
-	p := opinger.New()
-	err := p.Listen()
+	p, err := opinger.New()
 	if err != nil {
 		panic(err)
 	}
-	_, err = p.Ping("8.8.8.8", 10)
+	st, err := p.Ping("8.8.8.8", 10)
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
 	}
-
+	spew.Dump(st)
 	// time.Sleep(10 * time.Second)
 }
