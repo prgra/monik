@@ -10,25 +10,24 @@ import (
 )
 
 func main() {
-	p, err := opinger.New()
+	p, err := opinger.New(opinger.Conf{Workers: 20000})
 	if err != nil {
 		panic(err)
 	}
-	go p.Dump()
 	time.Sleep(5 * time.Second)
 	h := make(map[string]bool)
 	var hm sync.Mutex
 	go deb(h, &hm)
 	var wg sync.WaitGroup
-	for y := 128; y < 140; y++ {
-		for x := 1; x < 255; x++ {
+	for y := 0; y < 255; y++ {
+		for x := 0; x < 255; x++ {
 			fmt.Printf("ping 10.128.%d.%d\n", y, x)
 			hm.Lock()
 			h[fmt.Sprintf("10.128.%d.%d", y, x)] = true
 			hm.Unlock()
 			go func(x int, y int, wg *sync.WaitGroup, p *opinger.Pinger) {
 				wg.Add(1)
-				st, err := p.Ping(fmt.Sprintf("10.128.%d.%d", y, x), 3)
+				st, err := p.Ping(fmt.Sprintf("10.128.%d.%d", y, x), 10)
 				if err != nil {
 					fmt.Println(err)
 				}
