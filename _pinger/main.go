@@ -1,15 +1,19 @@
 package main
 
 import (
-	"monik/pinger"
-	"strconv"
-	"time"
+	"github.com/prgra/monik/opinger"
 )
 
 func main() {
-	for x := 1; x < 255; x++ {
-
-		go pinger.Ping("192.168.1."+strconv.Itoa(x), time.Second*5)
+	p := opinger.New()
+	err := p.Listen()
+	if err != nil {
+		panic(err)
 	}
-	time.Sleep(100 * time.Second)
+	_, err = p.Ping("8.8.8.8", 10)
+	if err != nil {
+		panic(err)
+	}
+
+	// time.Sleep(10 * time.Second)
 }
