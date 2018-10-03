@@ -157,7 +157,7 @@ func generateData(c int) []byte {
 // rping real ping non public
 func (p *Pinger) rping(pp pingParam) (ra []Stat, err error) {
 	var res Stat
-	var vg sync.WaitGroup
+	var wg sync.WaitGroup
 
 	for x := 0; x < pp.cnt; x++ {
 		wm := icmp.Message{
@@ -204,10 +204,10 @@ func (p *Pinger) rping(pp pingParam) (ra []Stat, err error) {
 				ra = append(ra, res)
 				wg.Done()
 			}
-		}(x, &vg, res)
+		}(x, &wg, res)
 
 		time.Sleep(p.interval)
 	}
-	vg.Wait()
+	wg.Wait()
 	return ra, nil
 }
