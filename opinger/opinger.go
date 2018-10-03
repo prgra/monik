@@ -1,7 +1,6 @@
 package opinger
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"os"
@@ -25,6 +24,12 @@ type ping struct {
 	Seq int
 }
 
+type pingParam struct {
+	ip    string
+	cnt   int
+	rchan chan []Stat
+}
+
 // TODO дописать
 
 // Pinger type for ...
@@ -32,18 +37,60 @@ type Pinger struct {
 	dbmut sync.RWMutex
 	db    map[ping]chan Stat
 	c     *icmp.PacketConn
+	limit int
+	ch    chan pingParam
 }
 
 // New return new pinger
 func New() (*Pinger, error) {
 	var p Pinger
 	p.db = make(map[ping]chan Stat)
-	err := p.Listen()
+	p.limit = 65500
+	p.ch = make(chan pingParam, 100000)
+	err := p.listen()
+	for x := 0; x < 2048; x++ {
+		go p.pingWorker()
+
+	}
 	return &p, err
 }
 
+func (p *Pinger) Dump() {
+	for {
+		p.dbmut.Lock()
+		log.Printf("DEBUG::in channel %d, db:%d", len(p.ch), len(p.db))
+		p.dbmut.Unlock()
+		time.Sleep(time.Second * 1)
+	}
+}
+
+func (p *Pinger) pingWorker() error {
+	for {
+		v, ok := <-p.ch
+		if !ok {
+			break
+		}
+		st, err := p.rping(v)
+		if err != nil {
+			return err
+		}
+		v.rchan <- st
+	}
+	return nil
+}
+
+func (p *Pinger) Ping(ip string, cnt int) ([]Stat, error) {
+	var pp pingParam
+	pp.rchan = make(chan []Stat)
+	pp.ip = ip
+	pp.cnt = cnt
+	p.ch <- pp
+	res := <-pp.rchan
+	return res, nil
+}
+
 // Listen start listen icmp proccess in background
-func (p *Pinger) Listen() (err error) {
+func (p *Pinger) listen() (err error) {
 	p.c, err = icmp.ListenPacket("ip4:icmp", "0.0.0.0")
 	if err != nil {
 		return err
@@ -61,21 +108,24 @@ func (p *Pinger) Listen() (err error) {
 			if err != nil {
 				log.Fatal(err)
 			}
-			body := rm.Body.(*icmp.Echo)
 
-			p.dbmut.Lock()
-			_, ok := p.db[ping{IP: peer.String(), Seq: body.Seq}]
-			log.Println(p.db)
+			switch body := rm.Body.(type) {
+			case *icmp.Echo:
 
-			if ok {
-				log.Println(peer.String())
-				var st Stat
-				st.Recv = true
-				st.RecvTime = time.Now()
-				p.db[ping{IP: peer.String(), Seq: body.Seq}] <- st
+				p.dbmut.Lock()
+				_, ok := p.db[ping{IP: peer.String(), Seq: body.Seq}]
+				// log.Println(p.db)
+				if ok {
+					// log.Println(peer.String())
+					var st Stat
+					st.Recv = true
+					st.RecvTime = time.Now()
+					p.db[ping{IP: peer.String(), Seq: body.Seq}] <- st
+				}
+				p.dbmut.Unlock()
+				// log.Println("no me", spew.Sdump(body.Seq))
+
 			}
-			p.dbmut.Unlock()
-			// log.Println("no me", spew.Sdump(body.Seq))
 		}
 	}()
 	return nil
@@ -89,13 +139,26 @@ func generateData(c int) []byte {
 	return date
 }
 
-func (p *Pinger) Ping(ip string, c int) (ra []Stat, err error) {
+// func (p *Pinger) waitForLim() {
+// 	for {
+// 		p.dbmut.Lock()
+// 		cnt := len(p.db)
+// 		p.dbmut.Unlock()
+// 		if cnt < p.limit {
+// 			log.Println("return from lim")
+// 			return
+// 		}
+// 		time.Sleep(500 * time.Millisecond)
+// 		log.Println("limit ", cnt)
+// 	}
 
+// }
+
+func (p *Pinger) rping(pp pingParam) (ra []Stat, err error) {
 	var res Stat
-
 	var vg sync.WaitGroup
-	for x := 1; x <= c; x++ {
-		log.Println("raskolbas", x)
+	for x := 1; x <= pp.cnt; x++ {
+		// log.Println("raskolbas", x)
 		wm := icmp.Message{
 			Type: ipv4.ICMPTypeEcho, Code: 0,
 			Body: &icmp.Echo{
@@ -108,41 +171,47 @@ func (p *Pinger) Ping(ip string, c int) (ra []Stat, err error) {
 		if err != nil {
 			// return ra, err
 		}
-		if _, err := p.c.WriteTo(wb, &net.IPAddr{IP: net.ParseIP(ip)}); err != nil {
+		if _, err := p.c.WriteTo(wb, &net.IPAddr{IP: net.ParseIP(pp.ip)}); err != nil {
 			// return ra, err
 		}
 		res.SendTime = time.Now()
 		p.dbmut.Lock()
-		p.db[ping{IP: ip, Seq: x}] = make(chan Stat)
+		p.db[ping{IP: pp.ip, Seq: x}] = make(chan Stat)
 		p.dbmut.Unlock()
-		log.Println("send", x)
+		// log.Println("send", x)
 
-		log.Println("cach", x)
-		go func(x int, vg *sync.WaitGroup) {
+		// log.Println("cach", x)
+
+		go func(x int, vg *sync.WaitGroup, res Stat) {
 			vg.Add(1)
+			p.dbmut.Lock()
+			ch := p.db[ping{IP: pp.ip, Seq: x}]
+			p.dbmut.Unlock()
 			select {
-			case st := <-p.db[ping{IP: ip, Seq: x}]:
-				fmt.Println("recv ", ping{IP: ip, Seq: x}, st)
+			case st := <-ch:
+				// fmt.Println("recv ", ping{IP: ip, Seq: x}, st)
 				p.dbmut.Lock()
-				delete(p.db, ping{IP: ip, Seq: x})
+				delete(p.db, ping{IP: pp.ip, Seq: x})
 				p.dbmut.Unlock()
 				st.SendTime = res.SendTime
-				ra = append(ra, res)
+				st.Recv = true
+				st.RecvTime = time.Now()
+				ra = append(ra, st)
 				vg.Done()
 			case <-time.After(time.Second * 10):
-				log.Println("timeout", x)
+				// log.Println("timeout", x)
 				res.Recv = false
 				p.dbmut.Lock()
-				delete(p.db, ping{IP: ip, Seq: x})
+				delete(p.db, ping{IP: pp.ip, Seq: x})
 				p.dbmut.Unlock()
 				ra = append(ra, res)
 				vg.Done()
 			}
-		}(x, &vg)
+		}(x, &vg, res)
 
 		time.Sleep(1000 * time.Millisecond)
 	}
-	log.Println("waiting")
+	// log.Println("waiting")
 	vg.Wait()
 	return ra, nil
 }
