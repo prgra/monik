@@ -6,11 +6,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prgra/monik/opinger"
+	"github.com/prgra/oping"
 )
 
 func main() {
-	p, err := opinger.New(opinger.Conf{Workers: 20000})
+	p, err := oping.New(oping.Conf{Workers: 20000})
 	if err != nil {
 		panic(err)
 	}
@@ -25,7 +25,7 @@ func main() {
 			hm.Lock()
 			h[fmt.Sprintf("10.128.%d.%d", y, x)] = true
 			hm.Unlock()
-			go func(x int, y int, wg *sync.WaitGroup, p *opinger.Pinger) {
+			go func(x int, y int, wg *sync.WaitGroup, p *oping.Pinger) {
 				wg.Add(1)
 				st, err := p.Ping(fmt.Sprintf("10.128.%d.%d", y, x), 10)
 				if err != nil {
