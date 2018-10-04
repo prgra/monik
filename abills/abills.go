@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prgra/monik/pinger"
+	"github.com/prgra/oping"
 
 	//mysql
 	_ "github.com/go-sql-driver/mysql"
@@ -18,8 +18,15 @@ import (
 
 var ping chan Nas
 var nases nasdb
+var pinger *oping.Pinger
 
 func init() {
+	var err error
+	pinger, err = oping.New(oping.Conf{})
+	_ = pinger
+	if err != nil {
+		panic(err)
+	}
 	ping = make(chan Nas, 1)
 	nases.data = make(map[int]Nas)
 	for i := 0; i < 9600; i++ {
@@ -169,18 +176,14 @@ func GetNases() error {
 // Ping send to ping chan
 func (h *Nas) Ping(c int) PingStat {
 	// log.Printf("start ping: %v", h)
+	st, _ := pinger.Ping(h.IP.String(), c)
 	var res PingStat
-	for x := 0; x < c; x++ {
-		stat, err := pinger.Ping(h.IP.String(), time.Second*5)
-		if err != nil {
-			log.Printf("Ping error: %v\n", err)
-		}
-		// log.Printf("stat: %v", stat)
-		res.Cnt++
+	res.Cnt = c
 
-		if !stat.End.IsZero() {
+	for _, s := range st {
+		if s.Recv {
 			res.Recv++
-			ti := stat.End.Sub(stat.End)
+			ti := s.RecvTime.Sub(s.SendTime)
 			res.Mid += ti
 			if ti > res.Max {
 				res.Max = ti
@@ -189,20 +192,55 @@ func (h *Nas) Ping(c int) PingStat {
 				res.Min = ti
 			}
 		}
-
 	}
 	if res.Recv > 0 {
-		mi := int64(res.Sum/time.Millisecond) / int64(res.Recv)
-		res.Mid = time.Duration(mi) * time.Millisecond
-		// fmt.Println("OK ", h.IP, res, suc, 100-100*suc/c)
 		h.LossPerc = byte(100 - 100*res.Recv/c)
+		res.Mid = time.Duration(int(res.Mid) / res.Recv)
+		log.Println(res)
 	} else {
 		h.LossPerc = 100
-		// log.Println("loss", h.IP)
 	}
 	nases.Push(*h)
+
 	return res
 }
+
+// func (h *Nas) oldPing(c int) PingStat {
+// 	// log.Printf("start ping: %v", h)
+// 	var res PingStat
+// 	for x := 0; x < c; x++ {
+// 		stat, err := pinger.Ping(h.IP.String(), time.Second*5)
+// 		if err != nil {
+// 			log.Printf("Ping error: %v\n", err)
+// 		}
+// 		// log.Printf("stat: %v", stat)
+// 		res.Cnt++
+
+// 		if !stat.End.IsZero() {
+// 			res.Recv++
+// 			ti := stat.End.Sub(stat.End)
+// 			res.Mid += ti
+// 			if ti > res.Max {
+// 				res.Max = ti
+// 			}
+// 			if ti < res.Min || res.Min == 0 {
+// 				res.Min = ti
+// 			}
+// 		}
+
+// 	}
+// 	if res.Recv > 0 {
+// 		mi := int64(res.Sum/time.Millisecond) / int64(res.Recv)
+// 		res.Mid = time.Duration(mi) * time.Millisecond
+// 		// fmt.Println("OK ", h.IP, res, suc, 100-100*suc/c)
+// 		h.LossPerc = byte(100 - 100*res.Recv/c)
+// 	} else {
+// 		h.LossPerc = 100
+// 		// log.Println("loss", h.IP)
+// 	}
+// 	nases.Push(*h)
+// 	return res
+// }
 
 func periodic() {
 	log.Println("start periodic")
