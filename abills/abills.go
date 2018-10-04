@@ -133,13 +133,13 @@ func (s SortedNases) Less(i, j int) bool {
 // NasGrep :: search in nases
 func NasGrep(nases []Nas, s string) []Nas {
 	var n []Nas
-	for _, v := range nases {
+	for i := range nases {
 		s = strings.ToLower(s)
-		addr := strings.ToLower(v.Street + " " + v.Build)
+		addr := strings.ToLower(nases[i].Street + " " + nases[i].Build)
 		if strings.Index(addr, s) >= 0 ||
-			strings.Index(v.IP.String(), s) >= 0 ||
-			strings.Index(v.MAC.String(), s) >= 0 {
-			n = append(n, v)
+			strings.Index(nases[i].IP.String(), s) >= 0 ||
+			strings.Index(nases[i].MAC.String(), s) >= 0 {
+			n = append(n, nases[i])
 		}
 	}
 	return n
