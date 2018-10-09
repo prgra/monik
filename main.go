@@ -42,6 +42,7 @@ func main() {
 	r.GET("/", offline)
 	r.GET("/search", search)
 	r.GET("/search/:q", search)
+	r.GET("/hist/:id", history)
 	r.HTMLRender = render.Init()
 	r.Static("/static", "./static")
 

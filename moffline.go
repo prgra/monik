@@ -1,10 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/prgra/monik/abills"
 
 	"github.com/gin-gonic/gin"
@@ -33,4 +36,18 @@ func search(c *gin.Context) {
 	sort.Sort(s)
 	cnt := len(s)
 	c.HTML(http.StatusOK, "main/offline", gin.H{"offline": s, "cnt": cnt, "q": q})
+}
+
+func history(c *gin.Context) {
+	sid := c.Param("id")
+	id, _ := strconv.Atoi(sid)
+	if id == 0 {
+		c.String(http.StatusOK, "need id")
+	}
+	n, ok := abills.GetNas(id)
+	if ok {
+		c.HTML(http.StatusOK, "main/history", gin.H{"n": spew.Sdump(n)})
+		return
+	}
+	c.String(http.StatusOK, fmt.Sprintf("no nas with id %d", id))
 }

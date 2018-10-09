@@ -16,31 +16,38 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
+const numWorkers = 1000
+
 var ping chan Nas
 var nases nasdb
 var pinger *oping.Pinger
 
 func init() {
 	var err error
-	pinger, err = oping.New(oping.Conf{})
+	pinger, err = oping.New(oping.Conf{Workers: numWorkers})
 	_ = pinger
 	if err != nil {
 		panic(err)
 	}
 	ping = make(chan Nas, 1)
 	nases.data = make(map[int]Nas)
-	for i := 0; i < 9600; i++ {
+	for i := 0; i < numWorkers; i++ {
 		go worker(i)
 	}
 	go periodic()
-	go dper()
-}
-func dper() {
-	for {
-		time.Sleep(10 * time.Second)
-		log.Println("in chan", len(ping))
+	boltdb, err = loadBolt("db.bolt")
+	if err != nil {
+		panic(err)
 	}
+	// go dper()
 }
+
+// func dper() {
+// 	for {
+// 		time.Sleep(10 * time.Second)
+// 		log.Println("in chan", len(ping))
+// 	}
+// }
 
 var db *sql.DB
 
@@ -49,8 +56,14 @@ func New(url string) error {
 	var err error
 	log.Println("connect to db")
 	db, err = sql.Open("mysql", url)
-	GetNases()
-	return err
+	if err != nil {
+		return err
+	}
+	err = GetNases()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 type nasdb struct {
@@ -58,10 +71,19 @@ type nasdb struct {
 	mut  sync.RWMutex
 }
 
-func (n *nasdb) Get(key int) Nas {
+func (n *nasdb) Get(key int) (Nas, bool) {
 	n.mut.RLock()
-	defer n.mut.RUnlock()
-	return n.data[key]
+	v, ok := n.data[key]
+	n.mut.RUnlock()
+	return v, ok
+}
+
+// GetNas return nas from db
+func GetNas(key int) (Nas, bool) {
+	nases.mut.RLock()
+	v, ok := nases.data[key]
+	nases.mut.RUnlock()
+	return v, ok
 }
 
 //GetKeys all keys of db
@@ -244,13 +266,16 @@ func (h *Nas) Ping(c int) PingStat {
 
 func periodic() {
 	log.Println("start periodic")
-	time.Sleep(10 * time.Second)
+	time.Sleep(2 * time.Second)
 	for {
 		log.Println("periodic loop start")
 		keys := nases.GetKeys()
-		log.Println("keys", len(keys))
+		// log.Println("keys", len(keys))
 		for _, k := range keys {
-			ping <- nases.Get(k)
+			v, ok := nases.Get(k)
+			if ok {
+				ping <- v
+			}
 		}
 		time.Sleep(60 * time.Second)
 	}
