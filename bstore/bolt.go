@@ -45,6 +45,20 @@ func GetHistory(id int) ([]History, error) {
 	return Unmarshal(bh), nil
 }
 
+func PutHistory(id int, hs []History) error {
+	boltdb.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("history"))
+		bi := make([]byte, 8)
+		binary.BigEndian.PutUint64(bi, uint64(id))
+		err := b.Put([]byte(bi), Marshal(hs))
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	return nil
+}
+
 func Unmarshal(b []byte) (hist []History) {
 	for i := 0; i < len(b); i++ {
 		if len(b) < i+9 {
