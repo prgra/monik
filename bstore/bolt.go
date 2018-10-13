@@ -46,7 +46,7 @@ func GetHistory(id int) ([]History, error) {
 }
 
 func PutHistory(id int, hs []History) error {
-	boltdb.View(func(tx *bolt.Tx) error {
+	boltdb.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("history"))
 		bi := make([]byte, 8)
 		binary.BigEndian.PutUint64(bi, uint64(id))

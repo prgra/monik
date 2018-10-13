@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prgra/monik/bstore"
+
 	"github.com/prgra/oping"
 
 	//mysql
@@ -293,6 +295,25 @@ func worker(id int) {
 		if stat.Recv > 0 {
 			// log.Println(n.IP, id, stat)
 		}
+		hs, err := bstore.GetHistory(n.ID)
+		if err != nil {
+			log.Printf("bstore error: %v\n", err)
+		}
+		log.Printf("get %d from db, %v", n.ID, hs)
+		perc := 100
+		if stat.Recv > 0 {
+			perc = 100 - (100 * (stat.Cnt / stat.Recv))
+		}
+
+		if len(hs) == 0 || hs[len(hs)-1].Loss != byte(perc) {
+			hs = append(hs, bstore.History{Date: time.Now(), Loss: byte(perc)})
+			log.Printf("push to db %d, :%v\n", n.ID, hs)
+			err := bstore.PutHistory(n.ID, hs)
+			if err != nil {
+				log.Printf("bstore write error: %v", err)
+			}
+		}
+
 	}
 }
 
