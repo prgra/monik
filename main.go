@@ -35,6 +35,7 @@ func main() {
 			return i + 1
 		},
 	}
+
 	render.TemplateFuncMap = template.FuncMap(funcMap)
 	r.Use(gin.Recovery())
 	r.Use(FaviconNew("./static/favicon.ico"))

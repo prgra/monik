@@ -13,6 +13,7 @@ import (
 	"github.com/prgra/oping"
 
 	//mysql
+	_ "github.com/boltdb/bolt"
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -35,7 +36,7 @@ func init() {
 		go worker(i)
 	}
 	go periodic()
-	boltdb, err = loadBolt("db.bolt")
+
 	if err != nil {
 		panic(err)
 	}

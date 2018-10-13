@@ -1,4 +1,4 @@
-package abills
+package bstore
 
 import (
 	"encoding/binary"
@@ -9,7 +9,7 @@ import (
 
 var boltdb *bolt.DB
 
-func loadBolt(file string) (*bolt.DB, error) {
+func LoadBolt(file string) (*bolt.DB, error) {
 	db, err := bolt.Open(file, 0600, nil)
 	if err != nil {
 		return db, err
@@ -42,16 +42,16 @@ func GetHistory(id int) ([]History, error) {
 		bh = b.Get(bi)
 		return nil
 	})
-	return bhUnmarshal(bh), nil
+	return Unmarshal(bh), nil
 }
 
-func bhUnmarshal(b []byte) (hist []History) {
+func Unmarshal(b []byte) (hist []History) {
 	for i := 0; i < len(b); i++ {
 		if len(b) < i+9 {
 			break
 		}
-		ts, _ := binary.Uvarint(b[i : i+8])
-		i += 9
+		ts := int64(binary.LittleEndian.Uint64(b[i : i+8]))
+		i += 8
 		loss := b[i]
 		var h History
 		h.Date = time.Unix(int64(ts), 0)
@@ -59,4 +59,20 @@ func bhUnmarshal(b []byte) (hist []History) {
 		hist = append(hist, h)
 	}
 	return
+}
+
+func Marshal(hist []History) (b []byte) {
+	for i := range hist {
+		bi := make([]byte, 8)
+		binary.LittleEndian.PutUint64(bi, uint64(hist[i].Date.Unix()))
+		for x := range bi {
+			b = append(b, bi[x])
+		}
+		b = append(b, hist[i].Loss)
+	}
+	return
+}
+
+func init() {
+	boltdb, _ = LoadBolt("db.bolt")
 }
