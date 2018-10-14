@@ -9,8 +9,9 @@ import (
 
 var boltdb *bolt.DB
 
+// LoadBolt open file and create backets
 func LoadBolt(file string) (*bolt.DB, error) {
-	db, err := bolt.Open(file, 0600, nil)
+	db, err := bolt.Open(file, 0644, nil)
 	if err != nil {
 		return db, err
 	}
@@ -27,6 +28,7 @@ func LoadBolt(file string) (*bolt.DB, error) {
 	return db, nil
 }
 
+// History changes of Nas by date
 type History struct {
 	Date time.Time `json:"date"`
 	Loss byte      `json:"loss"`
@@ -45,6 +47,7 @@ func GetHistory(id int) ([]History, error) {
 	return Unmarshal(bh), nil
 }
 
+// PutHistory push history array to boltdb
 func PutHistory(id int, hs []History) error {
 	boltdb.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("history"))
@@ -59,6 +62,7 @@ func PutHistory(id int, hs []History) error {
 	return nil
 }
 
+// Unmarshal from binary to []History
 func Unmarshal(b []byte) (hist []History) {
 	for i := 0; i < len(b); i++ {
 		if len(b) < i+9 {
@@ -75,6 +79,7 @@ func Unmarshal(b []byte) (hist []History) {
 	return
 }
 
+// Marshal datetime to unix time in UTC by uint64 and 1 byte of percent loss
 func Marshal(hist []History) (b []byte) {
 	for i := range hist {
 		bi := make([]byte, 8)
